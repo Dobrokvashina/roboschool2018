@@ -30,9 +30,45 @@ void image_callback(const sensor_msgs::ImageConstPtr& msg)
 {        
     cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     cv::Mat image = cv_ptr->image;
+    cv::Mat hsvImage;
+    cv:cvtColor(image, hsvImage, CV_BGR2HSV);
 
-    // TODO: control the motors
-    // motors(50,50);
+    // Threshold the HSV image, keep only the yellow pixels
+    cv::Mat mask;
+    cv::Scalar lower_red(0, 100, 100);
+    cv::Scalar upper_red(30, 255, 255);
+    cv::inRange(hsvImage, lower_red, upper_red, mask);
+
+    int width = mask.cols;
+    int height = mask.rows;
+
+    int search_top = 3 * height / 4;
+    int search_bottom = search_top + 20;
+
+    // Zero out pixels outside the desired region
+    for (int y = 0; y < height - 2; y++) {
+        if (y < search_top || y > search_bottom) {
+            for (int x = 0; x < width; x++) {
+                mask.at<cv::Vec3b>(y, x)[0] = 0;
+                mask.at<cv::Vec3b>(y, x)[1] = 0;
+                mask.at<cv::Vec3b>(y, x)[2] = 0;
+            }
+        }
+    }
+
+    // Use the moments() function to calculate the centroid of the blob of the binary image
+    cv::Moments M = cv::moments(mask);
+
+    if (M.m00 > 0) {
+        int cx = int(M.m10 / M.m00);
+        int cy = int(M.m01 / M.m00);
+        cv::circle(image, cv::Point(cx, cy), 20, CV_RGB(255, 0, 0), -1);
+
+        // Move the robot in proportion to the error signal
+        int err = cx - width / 2;
+        motors(20,20 - err/20);
+    }
+
 
     cv::imshow("img", image);
     cv::waitKey(1);
@@ -41,8 +77,8 @@ void image_callback(const sensor_msgs::ImageConstPtr& msg)
 void motors(int16_t left, int16_t right)
 {
     car_msgs::MotorsControl msg;
-    msg.left = truncate(left);
-    msg.right = truncate(right);
+    msg.left = left;
+    msg.right = right;
     pub.publish(msg);
 }
 

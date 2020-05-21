@@ -25,68 +25,36 @@ def motors(l, r):
     msg.right = truncate(r)
     pub.publish(msg)
 
-def create_trackbars(image):
-    global is_trackbars
-    if not is_trackbars:
-        cv2.imshow('img', image)
-        cv2.createTrackbar('H min', 'img', 0,   180, nothing)
-        cv2.createTrackbar('H max', 'img', 180, 180, nothing)
-        cv2.createTrackbar('S min', 'img', 0,   255, nothing)
-        cv2.createTrackbar('S max', 'img', 190, 255, nothing)
-        cv2.createTrackbar('V min', 'img', 0,   255, nothing)
-        cv2.createTrackbar('V max', 'img', 255, 255, nothing)
-        cv2.createTrackbar('Threshold', 'img', 45, 300, nothing)
-        cv2.createTrackbar('Min length', 'img', 100, 300, nothing)
-        cv2.createTrackbar('Max gap', 'img', 10, 300, nothing)
-        cv2.createTrackbar('dilate kernel', 'img', 5, 15, nothing)
 
-        is_trackbars = True
 
 
 def image_callback(msg):
-    image = bridge.imgmsg_to_cv2(msg, 'bgr8')    
-    create_trackbars(image)
-
-    # trackbar handles position
-    h_min = cv2.getTrackbarPos('H min', 'img')
-    h_max = cv2.getTrackbarPos('H max', 'img')
-    s_min = cv2.getTrackbarPos('S min', 'img')
-    s_max = cv2.getTrackbarPos('S max', 'img')
-    v_min = cv2.getTrackbarPos('V min', 'img')
-    v_max = cv2.getTrackbarPos('V max', 'img')
-
-    threshold = cv2.getTrackbarPos('Threshold', 'img')
-    min_length = cv2.getTrackbarPos('Min length', 'img')
-    max_gap = cv2.getTrackbarPos('Max gap', 'img')
-    kernel_size = cv2.getTrackbarPos('dilate kernel', 'img')
+    image = bridge.imgmsg_to_cv2(msg, 'bgr8')
 
     # image cropping
     image_cropped = image[150:]
 
     # HSV conversion and binarisation
     hsv = cv2.cvtColor(image_cropped, cv2.COLOR_BGR2HSV)
-    binary = cv2.inRange(hsv, (h_min, s_min, v_min), (h_max, s_max, v_max))
-    binary = 255 - binary
+    binary = cv2.inRange(hsv, (0,100,100), (30,255,255))
 
     # Canny edges estimation
     edges = cv2.Canny(binary, 100, 200)
-    
-    # dilation - increase the width of the edges 
-    kernel = np.ones((kernel_size, kernel_size),np.uint8) 
-    dilation = cv2.dilate(edges, kernel, iterations = 1)
 
-    # find the lines using Hough 
-    lines = cv2.HoughLinesP(dilation, 0.5, np.pi/360.0, threshold, min_length, max_gap)
+    m = cv2.moments(binary);
 
-    # draw the lines
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            cv2.line(image_cropped, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    if m['m00'] > 0:
+        cx = int(m['m10'] / m['m00'])
+        cy = int(m['m01'] / m['m00'])
+
+        cv2.circle(binary, (cx, cy), 20, (255,0,0), -1)
+
+        err = cx - len(binary) / 2
+
+        motors(20, 20-float(err)/20)
             
     cv2.imshow('img', image)
     cv2.imshow('binary', binary)
-    cv2.imshow('edges', dilation)
     cv2.waitKey(1)
 
 
